@@ -1,0 +1,153 @@
+*********************
+Title: End-Point Enzymatic Assay Analysis
+library(tidyverse)
+library(ggsignif)
+library(ggplot2)
+library(plotly)
+library(scales)
+
+#Import Data
+res <- read.csv("./Data/.csv")
+
+#Data cleaning for cNRHX and cNRHX
+
+filt <- res %>%
+  filter(Compound %in% c("C-NADHX", "cNRHX"))
+
+filt$Area <- as.numeric(filt$Area)
+
+filtv <- filt %>%
+  filter(!grepl("Standard_mix", Filename))
+
+
+#Data cleaning for cNADHX
+
+Subs <- filtv %>%
+  filter(Compound %in% c("C-NADHX")) %>%
+  filter(!grepl("cNRHx_", Filename))
+
+Subs$Area <- as.numeric(Subs$Area)
+Subs$Area[is.na(Subs$Area)] <- 0 
+
+#Data cleaning for cNRHX
+
+Prod <- filtv %>%
+  filter(Compound %in% c("cNRHX")) %>%
+  filter(!grepl("cNRHx_", Filename))
+
+Prod$Area <- as.numeric(Prod$Area)
+Prod$Area[is.na(Prod$Area)] <- 0 
+
+#Standard Curve filtration
+stcurve <- filt %>%
+  filter(Compound %in% c("cNRHX")) %>%
+  filter(grepl("cNRHx_", Filename))
+
+
+# Fix Name labels
+Subs$Name <- NA
+Subs$Name[grepl("E7_", Subs$Filename)] <- "E7"
+Subs$Name[grepl("E8_", Subs$Filename)] <- "E8"
+Subs$Name[grepl("E9_", Subs$Filename)] <- "E9"
+Subs$Name[grepl("E10_", Subs$Filename)] <- "E10"
+Subs$Name[grepl("E11_", Subs$Filename)] <- "E11"
+Subs$Name[grepl("E12_", Subs$Filename)] <- "E12"
+Subs$Name[grepl("F1_", Subs$Filename)] <- "F1"
+Subs$Name[grepl("F2_", Subs$Filename)] <- "F2"
+Subs$Name[grepl("F3_", Subs$Filename)] <- "F3"
+Subs$Name[grepl("F4_", Subs$Filename)] <- "F4"
+Subs$Name[grepl("F5_", Subs$Filename)] <- "F5"
+Subs$Name[grepl("F6_", Subs$Filename)] <- "F6"
+Subs$Name[grepl("F7_", Subs$Filename)] <- "F7"
+Subs$Name[grepl("E7_ctrl_", Subs$Filename)] <- "Enzyme Control"
+Subs$Name[grepl("Neg_", Subs$Filename)] <- "Negative Control"
+Subs$Name <- factor(Subs$Name, levels = c("Negative Control", "Enzyme Control", "E7", "E8", "E9", "E10", "E11", "E12", "F1", "F2", "F3", "F4", "F5", "F6" , "F7"  ))
+
+# Fix time labels
+Subs$Time <- NA
+Subs$Time[grepl("t_0", Subs$Filename)] <- "0 min"
+Subs$Time[grepl("t_15", Subs$Filename)] <- "15 min"
+Subs$Time[grepl("t_30", Subs$Filename)] <- "30 min"
+Subs$Time[grepl("t_40", Subs$Filename)] <- "30 min"
+Subs$Time[grepl("t_60", Subs$Filename)] <- "60 min"
+Subs$Time <- factor(Subs$Time, levels = c("0 min", "15 min", "30 min", "60 min"))
+
+# Fix Name labels
+Prod$Name <- NA
+Prod$Name[grepl("E7_", Prod$Filename)] <- "E7"
+Prod$Name[grepl("E8_", Prod$Filename)] <- "E8"
+Prod$Name[grepl("E9_", Prod$Filename)] <- "E9"
+Prod$Name[grepl("E10_", Prod$Filename)] <- "E10"
+Prod$Name[grepl("E11_", Prod$Filename)] <- "E11"
+Prod$Name[grepl("E12_", Prod$Filename)] <- "E12"
+Prod$Name[grepl("F1_", Prod$Filename)] <- "F1"
+Prod$Name[grepl("F2_", Prod$Filename)] <- "F2"
+Prod$Name[grepl("F3_", Prod$Filename)] <- "F3"
+Prod$Name[grepl("F4_", Prod$Filename)] <- "F4"
+Prod$Name[grepl("F5_", Prod$Filename)] <- "F5"
+Prod$Name[grepl("F6_", Prod$Filename)] <- "F6"
+Prod$Name[grepl("F7_", Prod$Filename)] <- "F7"
+Prod$Name[grepl("E7_ctrl_", Prod$Filename)] <- "Enzyme Control"
+Prod$Name[grepl("Neg_", Prod$Filename)] <- "Negative Control"
+Prod$Name <- factor(Prod$Name, levels = c("Negative Control", "Enzyme Control", "E7", "E8", "E9", "E10", "E11", "E12", "F1", "F2", "F3", "F4", "F5", "F6" , "F7"  ))
+
+# Fix time labels
+Prod$Time <- NA
+Prod$Time[grepl("t_0", Prod$Filename)] <- "0 min"
+Prod$Time[grepl("t_15", Prod$Filename)] <- "15 min"
+Prod$Time[grepl("t_30", Prod$Filename)] <- "30 min"
+Prod$Time[grepl("t_40", Prod$Filename)] <- "30 min"
+Prod$Time[grepl("t_60", Prod$Filename)] <- "60 min"
+Prod$Time <- factor(Prod$Time, levels = c("0 min", "15 min", "30 min", "60 min"))
+
+#Ratio
+Subs_summary <- Subs %>%
+  select(Name, Time, Area) %>%
+  rename(Substrate_Area = Area)
+
+# Prepare product data
+Prod_summary <- Prod %>%
+  select(Name, Time, Area) %>%
+  rename(Product_Area = Area)
+
+# Merge substrate and product data
+ratio_data <- merge(Subs_summary, Prod_summary, by = c("Name", "Time"), all = TRUE)
+
+# Calculate the ratio (Product/Substrate)
+ratio_data$Ratio <- ratio_data$Product_Area / ratio_data$Substrate_Area
+
+# Handle division by zero or NA values
+ratio_data$Ratio[is.infinite(ratio_data$Ratio)] <- NA  # Handle division by zero
+ratio_data$Ratio[is.na(ratio_data$Ratio)] <- 0  # Handle NA values
+
+print(ratio_data)
+
+p3 <- ggplot(ratio_data, aes(x = Time, y = Ratio, fill = Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "S.ce FY5 wild type SEC fractions",
+       x = "Time",
+       y = "cNRHx/cNADHx",
+       fill = "Sample") +
+  scale_y_continuous(labels = scales::scientific) +
+  theme_minimal() + 
+  theme(
+    legend.position = "top",
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16),
+    plot.title = element_text(hjust = 0.5, size = 24),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)       
+  )
+print(p3)
+
+ggsave(
+  filename = "cNRHx cNADHx ratio by wt fractions&ctrls_Bar.png",
+  plot = p3,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
