@@ -1,9 +1,11 @@
-*********************
-Title: End-Point Enzymatic Assay Analysis
+-----------------------------
+title: "End-Point Enzymatic Assay Analysis"
+author: "Koçdemir, Kübra"
+-----------------------------
+
 library(tidyverse)
 library(ggsignif)
 library(ggplot2)
-library(plotly)
 library(scales)
 
 #Import Data
