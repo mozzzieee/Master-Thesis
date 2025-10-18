@@ -9,7 +9,8 @@ library(ggplot2)
 library(scales)
 
 #Import Data
-res <- read.csv("./Data/.csv")
+res <- read.csv("./Data/.csv") #Targeted LCMSMS analysis including corresponding peak areas for product and substrate
+OD <- read.csv("./Data/.csv") #Data including final OD600 values for the corresponding batches
 
 #Data cleaning for cNRHX and cNRHX
 
@@ -178,20 +179,24 @@ Prod_summary <- Prod %>%
   select(Name, Time, Area) %>%
   rename(Product_Area = Area)
 
-# Merge substrate and product data in one dataset
+# # Merge substrate and product data and Final OD in one dataset
 ratio_data <- merge(Subs_summary, Prod_summary, by = c("Name", "Time"), all = TRUE)
+ratio_data <- merge(ratio_data, OD, by = c("Name"), all = TRUE)
 
 # Calculate the ratio (Product/Substrate)
 ratio_data$Ratio <- ratio_data$Product_Area / ratio_data$Substrate_Area
 
+# Normalize the ratio (Product/Substrate/Final OD)
+ratio_data$Normalized <- ratio_data$Ratio / ratio_data$OD
+
 # Handle division by zero or NA values
-ratio_data$Ratio[is.infinite(ratio_data$Ratio)] <- NA  # Handle division by zero
-ratio_data$Ratio[is.na(ratio_data$Ratio)] <- 0  # Handle NA values
+ratio_data$Normalized[is.infinite(ratio_data$Normalized)] <- NA  # Handle division by zero
+ratio_data$Normalized[is.na(ratio_data$Normalized)] <- 0  # Handle NA values
 
 print(ratio_data)
 
 #Generating normalized graph by ratio of Prod/Subs
-p3 <- ggplot(ratio_data, aes(x = Time, y = Ratio, fill = Name)) +
+p3 <- ggplot(ratio_data, aes(x = Time, y = Normalized, fill = Name)) +
   geom_bar(stat = "identity", position = "dodge") +
   labs(title = "",
        x = "Time",
