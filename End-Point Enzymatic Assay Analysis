@@ -19,7 +19,7 @@ filt <- res %>%
 filt$Area <- as.numeric(filt$Area)
 
 filtv <- filt %>%
-  filter(!grepl("Standard_mix", Filename))
+  filter(!grepl("Standard_mix|water", Filename))
 
 
 #Data cleaning for cNADHX
@@ -40,13 +40,13 @@ Prod <- filtv %>%
 Prod$Area <- as.numeric(Prod$Area)
 Prod$Area[is.na(Prod$Area)] <- 0 
 
-#Standard Curve filtration
+#Standard Curve filtration for Quantitative Assays
 stcurve <- filt %>%
   filter(Compound %in% c("cNRHX")) %>%
   filter(grepl("cNRHx_", Filename))
 
 
-# Fix Name labels
+# Generate a new column for the filtered substrate measurements according to the crude or fractions
 Subs$Name <- NA
 Subs$Name[grepl("E7_", Subs$Filename)] <- "E7"
 Subs$Name[grepl("E8_", Subs$Filename)] <- "E8"
@@ -65,7 +65,7 @@ Subs$Name[grepl("E7_ctrl_", Subs$Filename)] <- "Enzyme Control"
 Subs$Name[grepl("Neg_", Subs$Filename)] <- "Negative Control"
 Subs$Name <- factor(Subs$Name, levels = c("Negative Control", "Enzyme Control", "E7", "E8", "E9", "E10", "E11", "E12", "F1", "F2", "F3", "F4", "F5", "F6" , "F7"  ))
 
-# Fix time labels
+# Generate a new column corresponing to the time labels by the measured time points
 Subs$Time <- NA
 Subs$Time[grepl("t_0", Subs$Filename)] <- "0 min"
 Subs$Time[grepl("t_15", Subs$Filename)] <- "15 min"
@@ -74,7 +74,7 @@ Subs$Time[grepl("t_40", Subs$Filename)] <- "30 min"
 Subs$Time[grepl("t_60", Subs$Filename)] <- "60 min"
 Subs$Time <- factor(Subs$Time, levels = c("0 min", "15 min", "30 min", "60 min"))
 
-# Fix Name labels
+# Generate a new column for the filtered product measurements according to the crude or fractions
 Prod$Name <- NA
 Prod$Name[grepl("E7_", Prod$Filename)] <- "E7"
 Prod$Name[grepl("E8_", Prod$Filename)] <- "E8"
@@ -93,7 +93,7 @@ Prod$Name[grepl("E7_ctrl_", Prod$Filename)] <- "Enzyme Control"
 Prod$Name[grepl("Neg_", Prod$Filename)] <- "Negative Control"
 Prod$Name <- factor(Prod$Name, levels = c("Negative Control", "Enzyme Control", "E7", "E8", "E9", "E10", "E11", "E12", "F1", "F2", "F3", "F4", "F5", "F6" , "F7"  ))
 
-# Fix time labels
+# Generate a new column corresponing to the time labels by the measured time points
 Prod$Time <- NA
 Prod$Time[grepl("t_0", Prod$Filename)] <- "0 min"
 Prod$Time[grepl("t_15", Prod$Filename)] <- "15 min"
@@ -102,17 +102,83 @@ Prod$Time[grepl("t_40", Prod$Filename)] <- "30 min"
 Prod$Time[grepl("t_60", Prod$Filename)] <- "60 min"
 Prod$Time <- factor(Prod$Time, levels = c("0 min", "15 min", "30 min", "60 min"))
 
-#Ratio
+#Individual Bar Graph according to the production of cNRHx values over time
+p1 <- ggplot(Prod, aes(x = Time, y = Area, fill = Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "cNRHx production by S.ce FY4 wild type and KO strains",
+       x = "Time",
+       y = "Area",
+       fill = "Sample") +
+  scale_y_continuous(labels = scales::scientific) + 
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16),
+    plot.title = element_text(hjust = 0.5, size = 24),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)       
+  )
+print(p1)
+
+#Saving the generated bar graph as a png file
+ggsave(
+  filename = "cNRHx production by wt fractions&ctrls_Bar.png",
+  plot = p1,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+#Individual Bar Graph according to the consumptions of cNADHx values over time
+p2 <- ggplot(Subs, aes(x = Time, y = Area, fill = Name)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "cNADHx consumption by S.ce FY4 wild type and KO strains",
+       x = "Time",
+       y = "Area",
+       fill = "Sample") +
+  scale_y_continuous(labels = scales::scientific) + 
+  theme_minimal() +
+  theme(
+    legend.position = "top",
+    legend.text = element_text(size = 14),
+    legend.title = element_text(size = 16),
+    plot.title = element_text(hjust = 0.5, size = 24),
+    axis.title.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.x = element_text(size = 18),
+    axis.text.y = element_text(size = 18)       
+  )
+print(p2)
+
+#Saving the generated bar graph as a png file
+ggsave(
+  filename = "cNADHx consumption by wt fractions&ctrls_Bar.png",
+  plot = p2,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+---------------------------------------------------------------------
+#Generation normalized graphs by ratio of Product over Substrate
+
+#Filtering only Fraction Name, Timepoint and corresponding Peak area for Substrate and Product
 Subs_summary <- Subs %>%
   select(Name, Time, Area) %>%
   rename(Substrate_Area = Area)
 
-# Prepare product data
 Prod_summary <- Prod %>%
   select(Name, Time, Area) %>%
   rename(Product_Area = Area)
 
-# Merge substrate and product data
+# Merge substrate and product data in one dataset
 ratio_data <- merge(Subs_summary, Prod_summary, by = c("Name", "Time"), all = TRUE)
 
 # Calculate the ratio (Product/Substrate)
@@ -124,9 +190,10 @@ ratio_data$Ratio[is.na(ratio_data$Ratio)] <- 0  # Handle NA values
 
 print(ratio_data)
 
+#Generating normalized graph by ratio of Prod/Subs
 p3 <- ggplot(ratio_data, aes(x = Time, y = Ratio, fill = Name)) +
   geom_bar(stat = "identity", position = "dodge") +
-  labs(title = "S.ce FY5 wild type SEC fractions",
+  labs(title = "",
        x = "Time",
        y = "cNRHx/cNADHx",
        fill = "Sample") +
@@ -144,8 +211,9 @@ p3 <- ggplot(ratio_data, aes(x = Time, y = Ratio, fill = Name)) +
   )
 print(p3)
 
+#Saving generated ratio bar graph as a png file
 ggsave(
-  filename = "cNRHx cNADHx ratio by wt fractions&ctrls_Bar.png",
+  filename = "cNRHx cNADHx ratio by fractions_Bar.png",
   plot = p3,
   width = 10,
   height = 7,
