@@ -1,0 +1,275 @@
+--------------------------------------
+Title: Proteomics Analysis
+Author: Koçdemir, Kübra
+--------------------------------------
+
+library(tidyverse)
+library(ggsignif)
+library(ggplot2)
+library(plotly)
+library(dplyr)
+library(pheatmap)  
+#Import Data
+
+prot <- read.csv("./Data/proteomics_all.csv")
+
+#Filtration of normalized abundances
+prot_filtv3 <- prot %>% 
+  select(`Accession`, 
+         `Description`, 
+         `Ensembl.Gene.ID`, 
+         `Abundances..Normalized...F1..Sample`, 
+         `Abundances..Normalized...F2..Sample`, 
+         `Abundances..Normalized...F3..Sample`, 
+         `Abundances..Normalized...F4..Sample`, 
+         `Abundances..Normalized...F5..Sample`)
+
+abundance_cols <- c("Abundances..Normalized...F1..Sample", 
+                    "Abundances..Normalized...F2..Sample", 
+                    "Abundances..Normalized...F3..Sample", 
+                    "Abundances..Normalized...F4..Sample", 
+                    "Abundances..Normalized...F5..Sample")
+
+#Define empty cells as 1/5 of the minimum (applied in all v3)
+#If all row is NA, they all assign to 0.2 (will be resulting 1 are relative quantification with A6)
+prot_filtv3 <- prot_filtv3 %>%
+  rowwise() %>%
+  mutate(
+    row_min = suppressWarnings(min(c_across(all_of(abundance_cols)), na.rm = TRUE)),
+    row_min = if_else(is.infinite(row_min), 1, row_min),  # Replace Inf with 1
+    across(all_of(abundance_cols), 
+           ~ ifelse(is.na(.x), row_min / 5, .x))
+  ) %>%
+  select(-row_min) %>%
+  ungroup()
+
+
+#Calculate the ratio to least active fraction of each fraction
+prot_filtv3$Abundances_Ratio_F1v3 <- NA
+prot_filtv3$Abundances_Ratio_F2v3 <- NA
+prot_filtv3$Abundances_Ratio_F3v3 <- NA
+prot_filtv3$Abundances_Ratio_F4v3 <- NA
+prot_filtv3$Abundances_Ratio_F5v3 <- NA
+
+prot_filtv3 <- prot_filtv3 %>%
+  mutate(
+    Abundances_Ratio_F1v3 = `Abundances..Normalized...F1..Sample` / `Abundances..Normalized...F1..Sample`,
+    Abundances_Ratio_F2v3 = `Abundances..Normalized...F2..Sample` / `Abundances..Normalized...F1..Sample`,
+    Abundances_Ratio_F3v3 = `Abundances..Normalized...F3..Sample` / `Abundances..Normalized...F1..Sample`,
+    Abundances_Ratio_F4v3 = `Abundances..Normalized...F4..Sample` / `Abundances..Normalized...F1..Sample`,
+    Abundances_Ratio_F5v3 = `Abundances..Normalized...F5..Sample` / `Abundances..Normalized...F1..Sample`
+  )
+
+# Sort the fraction with highest enrichment
+Max_enrich_ratiov3 <- prot_filtv3 %>%
+  rowwise() %>%
+  mutate(
+    Max_Ratio_Value = max(c(Abundances_Ratio_F1v3, Abundances_Ratio_F2v3, 
+                            Abundances_Ratio_F3v3, Abundances_Ratio_F4v3, 
+                            Abundances_Ratio_F5v3), na.rm = TRUE),
+    
+    # Add which fraction has the max enrichment
+    Max_Ratio_Fraction = case_when(
+      Abundances_Ratio_F1v3 == Max_Ratio_Value ~ "F1",
+      Abundances_Ratio_F2v3 == Max_Ratio_Value ~ "F2",
+      Abundances_Ratio_F3v3 == Max_Ratio_Value ~ "F3",
+      Abundances_Ratio_F4v3 == Max_Ratio_Value ~ "F4",
+      Abundances_Ratio_F5v3 == Max_Ratio_Value ~ "F5",
+      .default = NA_character_
+    )
+  ) %>%
+  ungroup()
+
+#Normalize all ratios in log2 base
+Max_enrich_ratiov3$log2_Ratio_F1 <- NA
+Max_enrich_ratiov3$log2_Ratio_F2 <- NA
+Max_enrich_ratiov3$log2_Ratio_F3 <- NA
+Max_enrich_ratiov3$log2_Ratio_F4 <- NA
+Max_enrich_ratiov3$log2_Ratio_F5 <- NA
+
+Max_enrich_ratiov3 <- Max_enrich_ratiov3 %>%
+  mutate(
+    log2_Ratio_F1 = log2(`Abundances_Ratio_F1v3`),
+    log2_Ratio_F2 = log2(`Abundances_Ratio_F2v3`),
+    log2_Ratio_F3 = log2(`Abundances_Ratio_F3v3`),
+    log2_Ratio_F4 = log2(`Abundances_Ratio_F4v3`),
+    log2_Ratio_F5 = log2(`Abundances_Ratio_F5v3`)
+  )
+
+Max_log2_ratiov3 <- Max_enrich_ratiov3 %>%
+  rowwise() %>%
+  mutate(
+    Max_log2_Value = max(c(log2_Ratio_F1, log2_Ratio_F2, 
+                           log2_Ratio_F3, log2_Ratio_F4, 
+                           log2_Ratio_F5), na.rm = TRUE),
+    
+    Max_log2_ratio_Fraction = case_when(
+      log2_Ratio_F1 == Max_log2_Value ~ "F1",
+      log2_Ratio_F2 == Max_log2_Value ~ "F2",
+      log2_Ratio_F3 == Max_log2_Value ~ "F3",
+      log2_Ratio_F4 == Max_log2_Value ~ "F4",
+      log2_Ratio_F5 == Max_log2_Value ~ "F5"
+    )
+  ) %>%
+  ungroup()
+
+Max_log2_ratiov3 <- Max_log2_ratiov3 %>%
+  select(-c(Abundances..Normalized...F1..Sample,
+            Abundances..Normalized...F2..Sample,
+            Abundances..Normalized...F3..Sample,
+            Abundances..Normalized...F4..Sample,
+            Abundances..Normalized...F5..Sample,
+            Abundances_Ratio_F1v3,
+            Abundances_Ratio_F2v3,
+            Abundances_Ratio_F3v3,
+            Abundances_Ratio_F4v3,
+            Abundances_Ratio_F5v3,
+            Max_Ratio_Value,
+            Max_Ratio_Fraction))
+
+
+
+#Remove any protein that is the most abundant in F1 (A6)
+Max_log2_ratiov3_filt <- Max_log2_ratiov3 %>%
+  filter(log2_Ratio_F2 > log2_Ratio_F1) %>%
+  filter(log2_Ratio_F3 > log2_Ratio_F1) %>%
+  filter(log2_Ratio_F4 > log2_Ratio_F1) %>%
+  filter(log2_Ratio_F5 > log2_Ratio_F1)
+
+# Proteins where F3(A8) has the highest enrichment
+A8_log2_v3 <- Max_log2_ratiov3_filt %>%
+  filter(Max_log2_ratio_Fraction  == "F3")
+
+
+#Filter the proteins in parallel to the specific activity measurements
+#Specific Activity order for 1 h: F3>F4>F2>F5>F1 (is taken as reference)
+A8_log2_v3_filt <- A8_log2_v3 %>%
+  filter(log2_Ratio_F3 > log2_Ratio_F5) %>%
+  filter(log2_Ratio_F4 > log2_Ratio_F2) %>%
+  filter(log2_Ratio_F2 > log2_Ratio_F5)
+
+A8_log2_v3_filt_sorted <- A8_log2_v3_filt %>% arrange(desc(log2_Ratio_F3))
+
+#Filter the proteins in parallel to the specific activity measurements
+#Specific Activity order for 1 h: F3>F4>F2>F5>F1 (is taken as reference)
+A8_log2_v3_filt2 <- A8_log2_v3 %>%
+  filter(log2_Ratio_F3 > log2_Ratio_F5) %>%
+  filter(log2_Ratio_F4 > log2_Ratio_F5) %>%
+  filter(log2_Ratio_F2 > log2_Ratio_F5) %>%
+  filter(log2_Ratio_F4 > log2_Ratio_F2) 
+
+print(A8_log2_v3_filt2)
+
+#Export Candidates in Table
+write.csv(A8_log2_v3_filt_sorted, file = "Candidate_Proteins_order.csv", row.names = FALSE)
+
+#Rename the columns for Bar Graph
+A8_log2_graph <- A8_log2_v3_filt %>%
+  pivot_longer(cols = starts_with("log2_Ratio"),
+               names_to = "Fraction",
+               values_to = "Relative_Abundance_log2") %>%
+  mutate(Fraction = recode(Fraction,
+                           "log2_Ratio_F1" = "A6",
+                           "log2_Ratio_F2" = "A7",
+                           "log2_Ratio_F3" = "A8",
+                           "log2_Ratio_F4" = "A9",
+                           "log2_Ratio_F5" = "A10"),
+         Fraction = factor(Fraction, levels = c("A6", "A7", "A8", "A9", "A10")))
+
+#Cumulative Graphs
+p <- ggplot(A8_log2_graph, aes(x = Fraction, y = Relative_Abundance_log2, fill = Accession)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  theme_minimal() +
+  labs(title = "Protein Abundancy Levels Across Fractions",
+       x = "Fraction",
+       y = "Relative Abundance (log2)",
+       fill = "Protein Accession Number") +
+  theme(legend.position = "right",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.text.x = element_text(size = 10),
+        axis.text.y = element_text(size = 10)) +
+  scale_fill_brewer(palette = "Set3")
+
+ggsave(
+  filename = "Protein Abundancy Levels Across Fractions_Bar.png",
+  plot = p,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+# Faceted bar chart
+p1 <- ggplot(A8_log2_graph, aes(x = Fraction, y = Relative_Abundance_log2, fill = Fraction)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~ Ensembl.Gene.ID, ncol = 4) +
+  theme_minimal() +
+  labs(title = "Protein Abundancy by Fraction",
+       x = "Fraction",
+       y = "Relative Abundance (log2)") +
+  theme(legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        strip.text = element_text(face = "bold")) +
+  scale_fill_brewer(palette = "Set2")
+
+ggsave(
+  filename = "Protein Abundancy Levels Across Fractions_Faceted_Bar.png",
+  plot = p1,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+
+#Heatmap
+A8_log2_heatmap <- A8_log2_v3_filt %>%
+  select(-c("Accession", "Description", "Max_log2_Value", "Max_log2_ratio_Fraction"))
+
+heatmap_data <- A8_log2_heatmap %>%
+  select(starts_with("log2_Ratio")) %>%
+  as.matrix()
+
+rownames(heatmap_data) <- A8_log2_heatmap$Ensembl.Gene.ID
+colnames(heatmap_data) <- c("A6", "A7", "A8", "A9", "A10")
+
+# Create heatmap with pheatmap
+
+pheatmap(heatmap_data,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,
+         color = colorRampPalette(c("#D4C5E8", "#FFFEF2", "#C5E8D4"))(100),
+         scale = "none",  # or "row" to scale by row
+         breaks = seq(data_min, data_max, length.out = 101),
+         main = "Protein Abundancy Heatmap",
+         fontsize = 10,
+         fontsize_row = 9,
+         fontsize_col = 10,
+         border_color = "grey60",
+         cellwidth = 40,
+         cellheight = 20)
+
+p2 <- ggplot(A8_log2_graph, aes(x = Fraction, y = Ensembl.Gene.ID, fill = Relative_Abundance_log2)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  scale_fill_gradient2(low = "#879cab", mid = "#edeefc", high = "#c1c5f5", 
+                       midpoint = 0, 
+                       name = "Relative\nAbundance") +
+  theme_minimal() +
+  labs(title = "Protein Abundancy Heatmap",
+       x = "Fraction",
+       y = "Gene ID") +
+  theme(plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.text.x = element_text(angle = 0, hjust = 0.5, size = 10),
+        axis.text.y = element_text(size = 9),
+        panel.grid = element_blank())
+
+ggsave(
+  filename = "Protein Abundancy Levels Across Fractions_heatmap.png",
+  plot = p2,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
