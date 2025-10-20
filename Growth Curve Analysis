@@ -1,0 +1,58 @@
+-----------------------------
+Title: Growth Curve Analysis
+Author: Koçdemir, Kübra
+-----------------------------
+
+library(tidyverse)
+library(ggsignif)
+library(scales)
+
+#Import Data
+res <- read.csv("./Data/GrowthCurve.csv")
+res <- res %>%
+  select(-`Time.s.`) %>% #Remove Time values in seconds
+  rename(Time = `Time..h.`) #Rename the column Time..h. to Time
+
+#Convert the dataset to long format according to their strains
+res_long <- res %>%
+  pivot_longer(cols = -Time, names_to = "Sample", values_to = "OD") %>%
+  mutate(Group = if_else(str_detect(Sample, "WT"), "WT", "KO"))
+
+#Rename the WT and KO strains
+res_long <- res_long %>%
+  mutate(Group = if_else(Group == "WT", "S.ce FY5 WT", "S.ce FY5 ΔYKL151C"))
+
+
+p <- ggplot(summary_data, aes(x = Time, y = mean_OD, color = Group)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = mean_OD - sd_OD, ymax = mean_OD + sd_OD),
+                width = 0.05, size = 0.2) +
+  scale_color_manual(values = c("S.ce FY5 WT" = "#4B61AB", "S.ce FY5 ΔYKL151C" = "#AB4B61")) +
+  scale_x_continuous(breaks = seq(0, 32, by = 3)) +  
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold"),
+    axis.text = element_text(size = 12),
+    axis.title = element_text(size = 13),
+    legend.position = "top",  
+    legend.title = element_blank()
+  ) +
+  labs(
+    title = "Growth Curve",
+    x = "Time (h)",
+    y = "Biomass OD600"
+  )
+
+print(p)
+
+#Save the graph as a png.file
+ggsave(
+  filename = "Growth Curve.png",
+  plot = p,
+  width = 10,
+  height = 7,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
